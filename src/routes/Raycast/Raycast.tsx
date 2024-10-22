@@ -16,22 +16,7 @@ type TaskWithProject = TaskAssignment & {
   project: Project;
 };
 
-export const Raycast = () => {
-  const [search, setSearch] = useState("");
-  const [filteredTasksWithProjects, setFilteredTasksWithProjects] = useState<
-    TaskWithProject[]
-  >([]);
-
-  const [selectedTask, setSelectedTask] = useState<TaskWithProject | null>(
-    null,
-  );
-
-  const [actionDropdownOpen, setActionDropdownOpen] = useState(false);
-  const [selectedActionIndex, setSelectedActionIndex] = useState(0);
-  const [activeTimeEntry, setActiveTimeEntry] = useState<TimeEntry | null>(
-    null,
-  );
-
+const useFilteredTasksWithProject = (search: string) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [taskAssignments, setTaskAssignments] = useState<TaskAssignment[]>([]);
 
@@ -49,6 +34,43 @@ export const Raycast = () => {
     setTaskAssignments(taskAssignments.task_assignments);
   };
 
+  // Fetches the data ONCE after the initial render
+  useEffect(() => {
+    fetchProjectData();
+    fetchTaskAssignmentData();
+  }, []);
+
+  const tasksWithProjects: TaskWithProject[] = taskAssignments
+    .map((taskAssignment) => ({
+      ...taskAssignment,
+      project: projects.find((p) => p.id === taskAssignment.project.id),
+    }))
+    .filter((taskWithMaybeProject): taskWithMaybeProject is TaskWithProject =>
+      Boolean(taskWithMaybeProject.project),
+    );
+
+  const filteredTasksWithProjects = tasksWithProjects.filter((task) =>
+    task.task.name.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  return { filteredTasksWithProjects };
+};
+
+// ==============
+
+export const Raycast = () => {
+  const [search, setSearch] = useState("");
+  const { filteredTasksWithProjects } = useFilteredTasksWithProject(search);
+  const [selectedTask, setSelectedTask] = useState<TaskWithProject | null>(
+    null,
+  );
+
+  const [actionDropdownOpen, setActionDropdownOpen] = useState(false);
+  const [selectedActionIndex, setSelectedActionIndex] = useState(0);
+  const [activeTimeEntry, setActiveTimeEntry] = useState<TimeEntry | null>(
+    null,
+  );
+
   const fetchRunningTimeEntryData = async () => {
     const authenticatedHarvestClient = createAuthenticatedHarvestClient();
     const runningTimeEntry = await fetchRunningTimeEntry(
@@ -58,36 +80,9 @@ export const Raycast = () => {
     setActiveTimeEntry(runningTimeEntry);
   };
 
-  const [tasksWithProjects, setTasksWithProjects] = useState<TaskWithProject[]>(
-    [],
-  );
-
   useEffect(() => {
-    fetchProjectData();
-    fetchTaskAssignmentData();
     fetchRunningTimeEntryData();
   }, []);
-
-  useEffect(() => {
-    const filteredTasksWithProjects = tasksWithProjects.filter((task) =>
-      task.task.name.toLowerCase().includes(search.toLowerCase()),
-    );
-
-    setFilteredTasksWithProjects(filteredTasksWithProjects);
-  }, [search, tasksWithProjects]);
-
-  useEffect(() => {
-    if (taskAssignments.length === 0 || projects.length === 0) {
-      return;
-    }
-
-    const tasksWithProjects = taskAssignments.map((taskAssignment) => ({
-      ...taskAssignment,
-      project: projects.find((p) => p.id === taskAssignment.project.id)!,
-    }));
-
-    setTasksWithProjects(tasksWithProjects);
-  }, [projects, taskAssignments]);
 
   const actions = useMemo(
     () => [
